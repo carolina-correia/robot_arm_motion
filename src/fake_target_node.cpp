@@ -24,6 +24,17 @@
 #include <geometry_msgs/PoseStamped.h>
 
 #include <robot_arm_motion/obstacle_msg.h>
+#include "Utils.h"
+
+
+bool _firstRealPoseReceived = false;
+
+Eigen::Vector3f _eePosition; // target position (for the end-effector of the robot)
+Eigen::Vector4f _eeOrientation; // target orientation (for the end-effector of the robot)
+Eigen::MatrixXf _eeRotMat; // target's rotation matrix (according to the frame on the base of the robot)
+
+Eigen::Vector3f tool_translation;
+Eigen::Matrix4f tool_transformation_mat;
 
 int parse_obs_params(std::string position_param,
     std::string orientation_param,
@@ -251,6 +262,28 @@ int parse_target_params(std::string position_param,
     return 0;
 }
 
+void robotListener(const geometry_msgs::Pose::ConstPtr& msg)
+{
+    Eigen::Vector4f tmp_ee;
+    Eigen::Matrix4f ee_tranformation;
+    ee_tranformation = Eigen::Matrix4f::Identity(4, 4);
+    tmp_ee << msg->position.x, msg->position.y, msg->position.z, 1.0f;
+
+    _eeOrientation << msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z;
+    _eeRotMat = Utils<float>::quaternionToRotationMatrix(_eeOrientation);
+
+    ee_tranformation.col(3) = tmp_ee;
+    ee_tranformation.block(0, 0, 3, 3) = _eeRotMat;
+
+    Eigen::Matrix4f tt = ee_tranformation * tool_transformation_mat;
+    _eePosition = tt.col(3).head(3);
+
+    if (!_firstRealPoseReceived) {
+        _firstRealPoseReceived = true;
+    }
+}
+
+
 int main(int argc, char** argv)
 {
     // initialize ros node
@@ -258,6 +291,9 @@ int main(int argc, char** argv)
 
     // define ros node-handler
     ros::NodeHandle n;
+
+    // subscribers for listening the pose (position-orientation) for the end-effector of the robot
+    ros::Subscriber robotSub = n.subscribe("/lwr/ee_pose", 1, robotListener);
 
     // define ros-publisher for the target
     ros::Publisher _pubTarget = n.advertise<geometry_msgs::Pose>("/target", 1);
@@ -291,13 +327,28 @@ int main(int argc, char** argv)
         return -2;
     }
 
+    // set the tool translation from the robot ee to the tip of the tool (or center point the two fingers of the gripper)
+    tool_translation << 0.0f, 0.0f, 0.16f;
+
+    // set the transformation matrix from the robot ee to the tip of the tool (or center point the two fingers of the gripper)
+    tool_transformation_mat = Eigen::Matrix4f::Identity(4, 4);
+    tool_transformation_mat.col(3).head(3) = tool_translation;
+
+    // set initial target choice
+    int currentTarget = 0;
+    // set distance threshold from target
+    float target_dis_threshold = 0.09;
+
+    Eigen::Vector3f currentTarget_pos(3);
+    currentTarget_pos << target_msg[currentTarget].position.x, target_msg[currentTarget].position.y, target_msg[currentTarget].position.z;
+
     ros::Rate loop_rate(100);
 
     while (ros::ok()) {
 
         // publish the messages
 
-        _pubTarget.publish(target_msg[0]);
+        _pubTarget.publish(target_msg[currentTarget]);
 
         obst_msg.header.stamp = ros::Time::now();
 
@@ -310,10 +361,21 @@ int main(int argc, char** argv)
 
         for (size_t i = 0; i < target_marker.size(); i++) {
             target_marker[i].header.stamp = ros::Time::now();
-
             vis_pub.publish(target_marker[i]);
         }
 
+        if (_firstRealPoseReceived) {
+            // std::cout << "distance: " << (currentTarget_pos - _eePosition).norm() << std::endl;
+            if ((currentTarget_pos - _eePosition).norm() <= target_dis_threshold) {
+                std::cout << "[obstacle-target simulation] Switching target from " << currentTarget << " to ";
+                currentTarget++;
+                if (currentTarget >= target_msg.size()) {
+                    currentTarget = 0;
+                }
+                currentTarget_pos << target_msg[currentTarget].position.x, target_msg[currentTarget].position.y, target_msg[currentTarget].position.z;
+                std::cout << currentTarget + 1 << std::endl;
+            }
+        }
         ros::spinOnce();
         loop_rate.sleep();
         // ++count;

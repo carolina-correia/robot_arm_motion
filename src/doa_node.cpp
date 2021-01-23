@@ -60,15 +60,18 @@ Eigen::Vector3f tool_translation;
 Eigen::Matrix4f tool_transformation_mat;
 
 std_msgs::Int32 predicted_label;
-bool _startRobotMotion = true;
+bool _startRobotMotion = false;
 bool _pauseRobotMotion = false;
 bool _activateGripper = false;
 int GripperState = 0; // 0 is opened, 1 is closed. starts open
+int gripper_position = 0;
+int gripper_status = 0;
 
 // bool isGripperOpen = false;
 // bool isGripperClosed = false;
 // bool gripperStoppedClosing = false;
 // bool gripperStoppedOpening = false;
+
 
 void robotListener(const geometry_msgs::Pose::ConstPtr& msg)
 {
@@ -196,7 +199,11 @@ int main(int argc, char** argv)
     // subscriber for receiving the obstacles
     ros::Subscriber _obstaclesSub = n.subscribe("/obstacles", 1, obstacleListener);
 
-    ros::Subscriber _emgclassifSub = n.subscribe("/predictedLabel", 1, emgLabelListener);
+    // subscribe to true or fake labels of emg classification
+    // ros::Subscriber _emgclassifSub = n.subscribe("/predictedLabel", 1, emgLabelListener);
+    ros::Subscriber _emgclassifSub = n.subscribe("/fakeLabels", 1, emgLabelListener);
+
+    // subriber for receiving gripper
     ros::Subscriber _gripperSub = n.subscribe("/gripper/Robotiq2FGripperRobotInput", 1, gripperListener);
 
     // define a publisher for visualizing the trajectory of the robot ee
@@ -263,14 +270,32 @@ int main(int argc, char** argv)
     // define ds-modulator for modulating the dynamical system according to the position and size of the obstacles
     DSObstacleAvoidance obsModulator;
 
-    ros::Rate loop_rate(100);
-
+    // emg part
     int count = 0;
     int vec_size = 0;
     int nb_pred = 5;
     int last_label = 7;
 
+    // initialize matrix to save data
+    int maxtime = 10000000;
+    int nbvar = 16;
+    int row_i = 0;
+    Eigen::MatrixXf all_data = Eigen::MatrixXf::Zero(maxtime, nbvar);
+    
+    // std::cout << "all_data" << all_data << "\n";
+
+    ros::Rate loop_rate(100);
+
     while (ros::ok()) {
+
+        all_data(row_i,0) = ros::Time::now().toSec();  // time
+
+        // double timestamp = ros::Time::now().toSec();
+        // std::cout << "timestamp: " << timestamp << "\n";
+        // Eigen::MatrixXd all_data;
+        // all_data (i,0) = timestamp;
+        // std::cout << "all_data" << all_data.size() << "\n";
+        
 
         if (_firstRealPoseReceived && _firstTargetPoseReceived) {
 
@@ -391,7 +416,7 @@ int main(int argc, char** argv)
             traj_line.header.stamp = ros::Time::now();
             traj_line.points.push_back(p);
             marker_pub.publish(traj_line);
-
+           
             // Gripper control:
             // take last 5 predicted labels and check if muscle was activated
             if (last_label == 7 && predicted_label.data == 5) {
@@ -418,6 +443,32 @@ int main(int argc, char** argv)
                           << "\n";
             }
         }
+
+        // saving all data in matrix
+        all_data(row_i,1) = _eePosition(0);            // end effector position 
+        all_data(row_i,2) = _eePosition(1);
+        all_data(row_i,3) = _eePosition(2);
+        all_data(row_i,4) = _vd.norm();                // end effector velocity (norm)
+        all_data(row_i,5) = _targetPosition(0);        // current target position
+        all_data(row_i,6) = _targetPosition(1);
+        all_data(row_i,7) = _targetPosition(2);
+        all_data(row_i,8) = predicted_label.data;      // final emg label
+        all_data(row_i,9) = _startRobotMotion;         // if received command to start motion
+        all_data(row_i,10) = _pauseRobotMotion;
+        all_data(row_i,11) = gripper_position;
+        all_data(row_i,12) = gripper_status;
+        all_data(row_i,13) = GripperState;
+        all_data(row_i,14) = _activateGripper;
+        all_data(row_i,14) = _desGripperCommand.data;
+
+        // std::cout << "all_data(row_i,0): " << all_data(row_i,0) << "\n";
+        // std::cout << "all_data(row_i,1): " << all_data(row_i,1) << "\n";
+        // std::cout << "all_data(row_i,2): " << all_data(row_i,2) << "\n";
+        // std::cout << "all_data(row_i,3): " << all_data(row_i,3) << "\n";
+        // std::cout << "all_data(row_i,4): " << all_data(row_i,4) << "\n";
+
+
+        row_i += 1;
 
         ros::spinOnce();
         loop_rate.sleep();
