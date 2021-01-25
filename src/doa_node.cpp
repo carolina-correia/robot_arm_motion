@@ -28,8 +28,6 @@
 #include "DSObstacleAvoidance.h"
 
 #include <sstream>
-
-// #include "LPV.h"
 #include "Utils.h"
 
 #include <Eigen/Dense>
@@ -40,6 +38,8 @@
 
 #include <algorithm>
 #include <numeric>
+#include <fstream>
+#include <ros/package.h>
 
 bool _firstRealPoseReceived = false;
 bool _firstObstacleReceived = false;
@@ -60,12 +60,14 @@ Eigen::Vector3f tool_translation;
 Eigen::Matrix4f tool_transformation_mat;
 
 std_msgs::Int32 predicted_label;
+std_msgs::Int32 gripper_position;
+std_msgs::Int32 gripper_status;
+
 bool _startRobotMotion = false;
 bool _pauseRobotMotion = false;
 bool _activateGripper = false;
 int GripperState = 0; // 0 is opened, 1 is closed. starts open
-int gripper_position = 0;
-int gripper_status = 0;
+std::ofstream _outputFile; 
 
 // bool isGripperOpen = false;
 // bool isGripperClosed = false;
@@ -156,14 +158,14 @@ void emgLabelListener(const std_msgs::Int32::ConstPtr& msg)
 
 void gripperListener(const robotiq_2f_gripper_control::Robotiq2FGripper_robot_input& msg)
 {
-    int gripper_position = msg.gPO;
-    int gripper_status = msg.gOBJ;
+    gripper_position.data = msg.gPO;
+    gripper_status.data = msg.gOBJ;
 
-    if (gripper_position <= 20) {
+    if (gripper_position.data <= 20) {
         GripperState = 0; // open
     }
 
-    if (gripper_position >= 200) {
+    if (gripper_position.data >= 200) {
         GripperState = 1; // closed
     }
 
@@ -174,8 +176,20 @@ void gripperListener(const robotiq_2f_gripper_control::Robotiq2FGripper_robot_in
     // if (gripper_status == 1) {
     //     gripperStoppedOpening = true; //due to contact with object
     // }
-    ROS_INFO("Gripper_position received: [%i] \n", gripper_position);
+    ROS_INFO("Gripper_position received: [%i] \n", gripper_position.data);
 }
+
+
+void logData(std::vector<double> data)
+{
+
+    for(int k = 0; k < data.size(); k++)
+    {
+        _outputFile << data[k] << " ";
+    }
+    _outputFile << std::endl;
+}
+
 
 int main(int argc, char** argv)
 {
@@ -275,27 +289,19 @@ int main(int argc, char** argv)
     int vec_size = 0;
     int nb_pred = 5;
     int last_label = 7;
-
-    // initialize matrix to save data
-    int maxtime = 10000000;
-    int nbvar = 16;
-    int row_i = 0;
-    Eigen::MatrixXf all_data = Eigen::MatrixXf::Zero(maxtime, nbvar);
     
-    // std::cout << "all_data" << all_data << "\n";
+    // name of file to save
+    std::string filename = "test1";
+    _outputFile.open(ros::package::getPath(std::string("robot_arm_motion"))+"/data/" + filename + ".txt");
+
 
     ros::Rate loop_rate(100);
 
     while (ros::ok()) {
 
-        all_data(row_i,0) = ros::Time::now().toSec();  // time
+        std::vector<double> data_vec(16);
+        data_vec[0] = ros::Time::now().toSec();  // time
 
-        // double timestamp = ros::Time::now().toSec();
-        // std::cout << "timestamp: " << timestamp << "\n";
-        // Eigen::MatrixXd all_data;
-        // all_data (i,0) = timestamp;
-        // std::cout << "all_data" << all_data.size() << "\n";
-        
 
         if (_firstRealPoseReceived && _firstTargetPoseReceived) {
 
@@ -416,13 +422,13 @@ int main(int argc, char** argv)
             traj_line.header.stamp = ros::Time::now();
             traj_line.points.push_back(p);
             marker_pub.publish(traj_line);
-           
+        
             // Gripper control:
             // take last 5 predicted labels and check if muscle was activated
             if (last_label == 7 && predicted_label.data == 5) {
                 _activateGripper = true;
                 std::cout << "Gripper activated"
-                          << "\n";
+                        << "\n";
             }
             else {
                 _activateGripper = false;
@@ -434,46 +440,41 @@ int main(int argc, char** argv)
                 _desGripperCommand.data = 1;
                 _pubGripperCommand.publish(_desGripperCommand);
                 std::cout << "Closing gripper"
-                          << "\n";
+                        << "\n";
             }
             if (_activateGripper && GripperState == 1) {
                 _desGripperCommand.data = 2;
                 _pubGripperCommand.publish(_desGripperCommand);
                 std::cout << "Opening gripper"
-                          << "\n";
+                        << "\n";
             }
         }
 
-        // saving all data in matrix
-        all_data(row_i,1) = _eePosition(0);            // end effector position 
-        all_data(row_i,2) = _eePosition(1);
-        all_data(row_i,3) = _eePosition(2);
-        all_data(row_i,4) = _vd.norm();                // end effector velocity (norm)
-        all_data(row_i,5) = _targetPosition(0);        // current target position
-        all_data(row_i,6) = _targetPosition(1);
-        all_data(row_i,7) = _targetPosition(2);
-        all_data(row_i,8) = predicted_label.data;      // final emg label
-        all_data(row_i,9) = _startRobotMotion;         // if received command to start motion
-        all_data(row_i,10) = _pauseRobotMotion;
-        all_data(row_i,11) = gripper_position;
-        all_data(row_i,12) = gripper_status;
-        all_data(row_i,13) = GripperState;
-        all_data(row_i,14) = _activateGripper;
-        all_data(row_i,14) = _desGripperCommand.data;
+        // saving all data in vector
+        data_vec[1] = _eePosition(0);     
+        data_vec[2] = _eePosition(1);      
+        data_vec[3] = _eePosition(2);      
+        data_vec[4] = _targetPosition(0);      
+        data_vec[5] = _targetPosition(1);     
+        data_vec[6] = _targetPosition(2);      
+        data_vec[7] = _vd.norm();                // end effector velocity (norm)
+        data_vec[8] = predicted_label.data;      // final emg label
+        data_vec[9] = _startRobotMotion;         // if received command to start motion
+        data_vec[10] = _pauseRobotMotion;
+        data_vec[11] = gripper_position.data;
+        data_vec[12] = gripper_status.data;
+        data_vec[13] = GripperState;
+        data_vec[14] = _activateGripper;
+        data_vec[15] = _desGripperCommand.data;
 
-        // std::cout << "all_data(row_i,0): " << all_data(row_i,0) << "\n";
-        // std::cout << "all_data(row_i,1): " << all_data(row_i,1) << "\n";
-        // std::cout << "all_data(row_i,2): " << all_data(row_i,2) << "\n";
-        // std::cout << "all_data(row_i,3): " << all_data(row_i,3) << "\n";
-        // std::cout << "all_data(row_i,4): " << all_data(row_i,4) << "\n";
-
-
-        row_i += 1;
+        logData(data_vec);
+        data_vec.clear();
 
         ros::spinOnce();
         loop_rate.sleep();
         ++count;
     }
+
 
     return 0;
 }

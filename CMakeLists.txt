@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   dynamic_reconfigure
   message_generation
+  gazebo_ros
 #  lpv
   # motion_generators
   utils
