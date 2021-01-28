@@ -1,7 +1,7 @@
 /**
  * 
  *  Developers:  Iason Batzianoulis
- *               Carolina Coreia
+ *               Carolina Correia
  *  email:       iasonbatz@gmail.com
  *               carolina.correia@epfl.ch
  *  
