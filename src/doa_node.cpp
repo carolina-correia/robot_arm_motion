@@ -194,9 +194,9 @@ void audiocuesListener(const std_msgs::Int32MultiArray::ConstPtr& msg){
     _audio_labels[1]= msg->data[1];
     _audio_labels[2]= msg->data[2];
 
-    std::cout << "y_start: " << _audio_labels[0] << "\n";
-    std::cout << "y_pause: " << _audio_labels[1] << "\n";
-    std::cout << "y_grasp: " << _audio_labels[2] << "\n";
+    // std::cout << "y_start: " << _audio_labels[0] << "\n";
+    // std::cout << "y_pause: " << _audio_labels[1] << "\n";
+    // std::cout << "y_grasp: " << _audio_labels[2] << "\n";
 
 }
 
@@ -228,10 +228,8 @@ int main(int argc, char** argv)
     // subscriber for listening the velocity of the end-effector (ee) of the robot
     ros::Subscriber _subRealTwist = n.subscribe("/lwr/ee_vel", 1, updateRealTwist);
 
-    // subscriber for receiving the target
+    // subscribers for receiving the targets and obstacles
     ros::Subscriber _targetSub = n.subscribe("/target", 1, targetListener);
-
-    // subscriber for receiving the obstacles
     ros::Subscriber _obstaclesSub = n.subscribe("/obstacles", 1, obstacleListener);
 
     // subscribe to true or fake labels of emg classification
@@ -251,16 +249,19 @@ int main(int argc, char** argv)
     ros::Publisher _pubDesiredOrientation = n.advertise<geometry_msgs::Quaternion>("/lwr/joint_controllers/passive_ds_command_orient", 1);
     ros::Publisher _pubGripperCommand = n.advertise<std_msgs::Int8>("/gripper/command", 10);
 
-    // define a message for the desired velocity
-    geometry_msgs::Twist _msgDesiredPose;
+    // publish startmotion, pausemotion and activate gripper to 3 different topics
+    ros::Publisher _pubStartMotion = n.advertise<std_msgs::Int8>("/startMotion", 10);
+    ros::Publisher _pubPauseMotion = n.advertise<std_msgs::Int8>("/pauseMotion", 10);
+    ros::Publisher _pubActivGripper = n.advertise<std_msgs::Int8>("/activGripper", 10);
 
-    // define a message for the desired orientation
-    geometry_msgs::Quaternion _msgDesiredOrientation;
-
-    // define a marker for visualizing the trajectory of the robot ee
-    visualization_msgs::Marker traj_line;
-
-    std_msgs::Int8 _desGripperCommand;
+    // define messages 
+    geometry_msgs::Twist _msgDesiredPose; //for the desired velocity
+    geometry_msgs::Quaternion _msgDesiredOrientation; //for the desired orientation
+    visualization_msgs::Marker traj_line; //for visualizing the trajectory of the robot ee
+    std_msgs::Int8 _desGripperCommand; //for desired command to send to gripper
+    std_msgs::Int8 _startMotionMsg; 
+    std_msgs::Int8 _pauseMotionMsg; 
+    std_msgs::Int8 _activGripperMsg; 
 
     traj_line.header.frame_id = "/world";
     traj_line.pose.orientation.w = 1.0;
@@ -362,6 +363,10 @@ int main(int argc, char** argv)
 
             // Start motion if label = 1, pause if label = 2
             if (_startRobotMotion) {
+                _startMotionMsg.data = 1;
+                _pauseMotionMsg.data = 0;
+                _pubStartMotion.publish(_startMotionMsg);
+                _pubPauseMotion.publish(_pauseMotionMsg);
                 // std::cout << "Starting robot motion "
                 //           << "\n";
 
@@ -384,6 +389,10 @@ int main(int argc, char** argv)
             }
 
             if (_pauseRobotMotion) {
+                _startMotionMsg.data = 0;
+                _pauseMotionMsg.data = 1;
+                _pubStartMotion.publish(_startMotionMsg);
+                _pubPauseMotion.publish(_pauseMotionMsg);
                 // std::cout << "Orientation of ee [0]: " << _eeOrientation[0] << "\n";
                 // std::cout << "Orientation of ee [1]: " << _eeOrientation[1] << "\n";
                 // std::cout << "Pausing robot motion "
@@ -453,13 +462,16 @@ int main(int argc, char** argv)
             // take last 5 predicted labels and check if muscle was activated
             if (last_label == 7 && predicted_label.data == 5) {
                 _activateGripper = true;
+                _activGripperMsg.data = 1;
                 std::cout << "Gripper activated"
                         << "\n";
             }
             else {
                 _activateGripper = false;
+                _activGripperMsg.data = 0;
             }
 
+            _pubActivGripper.publish(_activGripperMsg);
             last_label = predicted_label.data;
 
             if (_activateGripper && GripperState == 0) {
