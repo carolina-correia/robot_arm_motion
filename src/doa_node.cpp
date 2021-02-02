@@ -10,9 +10,9 @@
 
 #include "ros/ros.h"
 #include "std_msgs/Int32.h"
+#include "std_msgs/Int32MultiArray.h"
 #include "std_msgs/Int8.h"
 #include "std_msgs/String.h"
-#include "std_msgs/Int32MultiArray.h"
 
 #include "sensor_msgs/JointState.h"
 #include <geometry_msgs/PoseStamped.h>
@@ -28,8 +28,8 @@
 
 #include "DSObstacleAvoidance.h"
 
-#include <sstream>
 #include "Utils.h"
+#include <sstream>
 
 #include <Eigen/Dense>
 #include <Eigen/Eigen>
@@ -38,8 +38,8 @@
 #include <robotiq_2f_gripper_control/Robotiq2FGripper_robot_input.h>
 
 #include <algorithm>
-#include <numeric>
 #include <fstream>
+#include <numeric>
 #include <ros/package.h>
 
 bool _firstRealPoseReceived = false;
@@ -70,14 +70,13 @@ bool _pauseRobotMotion = false;
 bool _activateGripper = false;
 int GripperState = 0; // 0 is opened, 1 is closed. starts open
 
-std::ofstream _outputFile; 
+std::ofstream _outputFile;
 std::vector<int> _audio_labels(3);
 
 // bool isGripperOpen = false;
 // bool isGripperClosed = false;
 // bool gripperStoppedClosing = false;
 // bool gripperStoppedOpening = false;
-
 
 void robotListener(const geometry_msgs::Pose::ConstPtr& msg)
 {
@@ -183,34 +182,31 @@ void gripperListener(const robotiq_2f_gripper_control::Robotiq2FGripper_robot_in
     ROS_INFO("Gripper_position received: [%i] \n", gripper_position.data);
 }
 
-void audiocuesListener(const std_msgs::Int32MultiArray::ConstPtr& msg){
+void audiocuesListener(const std_msgs::Int32MultiArray::ConstPtr& msg)
+{
 
-    if(!_firstAudioLabels){
+    if (!_firstAudioLabels) {
         _firstAudioLabels = true;
         ROS_INFO("[robot_arm_motion:doa] Audio labels received\n");
     }
-    
-    _audio_labels[0]= msg->data[0]; 
-    _audio_labels[1]= msg->data[1];
-    _audio_labels[2]= msg->data[2];
+
+    _audio_labels[0] = msg->data[0];
+    _audio_labels[1] = msg->data[1];
+    _audio_labels[2] = msg->data[2];
 
     // std::cout << "y_start: " << _audio_labels[0] << "\n";
     // std::cout << "y_pause: " << _audio_labels[1] << "\n";
     // std::cout << "y_grasp: " << _audio_labels[2] << "\n";
-
 }
-
 
 void logData(std::vector<double> data)
 {
 
-    for(int k = 0; k < data.size(); k++)
-    {
+    for (int k = 0; k < data.size(); k++) {
         _outputFile << data[k] << " ";
     }
     _outputFile << std::endl;
 }
-
 
 int main(int argc, char** argv)
 {
@@ -233,8 +229,8 @@ int main(int argc, char** argv)
     ros::Subscriber _obstaclesSub = n.subscribe("/obstacles", 1, obstacleListener);
 
     // subscribe to true or fake labels of emg classification
-    // ros::Subscriber _emgclassifSub = n.subscribe("/predictedLabel", 1, emgLabelListener);
-    ros::Subscriber _emgclassifSub = n.subscribe("/fakeLabels", 1, emgLabelListener);
+    ros::Subscriber _emgclassifSub = n.subscribe("/predictedLabel", 1, emgLabelListener);
+    // ros::Subscriber _emgclassifSub = n.subscribe("/fakeLabels", 1, emgLabelListener);
 
     // subscriber for receiving gripper
     ros::Subscriber _gripperSub = n.subscribe("/gripper/Robotiq2FGripperRobotInput", 1, gripperListener);
@@ -254,14 +250,14 @@ int main(int argc, char** argv)
     ros::Publisher _pubPauseMotion = n.advertise<std_msgs::Int8>("/pauseMotion", 10);
     ros::Publisher _pubActivGripper = n.advertise<std_msgs::Int8>("/activGripper", 10);
 
-    // define messages 
+    // define messages
     geometry_msgs::Twist _msgDesiredPose; //for the desired velocity
     geometry_msgs::Quaternion _msgDesiredOrientation; //for the desired orientation
     visualization_msgs::Marker traj_line; //for visualizing the trajectory of the robot ee
     std_msgs::Int8 _desGripperCommand; //for desired command to send to gripper
-    std_msgs::Int8 _startMotionMsg; 
-    std_msgs::Int8 _pauseMotionMsg; 
-    std_msgs::Int8 _activGripperMsg; 
+    std_msgs::Int8 _startMotionMsg;
+    std_msgs::Int8 _pauseMotionMsg;
+    std_msgs::Int8 _activGripperMsg;
 
     traj_line.header.frame_id = "/world";
     traj_line.pose.orientation.w = 1.0;
@@ -316,8 +312,8 @@ int main(int argc, char** argv)
     int last_label = 7;
 
     // name of file to save
-    std::string filename = "test_audio";
-    _outputFile.open(ros::package::getPath(std::string("robot_arm_motion"))+"/data/" + filename + ".txt");
+    std::string filename = "trial_w_audio3";
+    _outputFile.open(ros::package::getPath(std::string("robot_arm_motion")) + "/data/" + filename + ".txt");
 
     double t_start = ros::Time::now().toSec();
     ros::Rate loop_rate(100);
@@ -325,8 +321,7 @@ int main(int argc, char** argv)
     while (ros::ok()) {
 
         std::vector<double> data_vec(19);
-        data_vec[0] = ros::Time::now().toSec() - t_start;  // time
-
+        data_vec[0] = ros::Time::now().toSec() - t_start; // time
 
         if (_firstRealPoseReceived && _firstTargetPoseReceived && _firstAudioLabels) {
 
@@ -351,7 +346,6 @@ int main(int argc, char** argv)
             else {
                 _vd = xD;
             }
-
 
             // Bound desired velocity
             if (_vd.norm() > 0.3f) {
@@ -457,14 +451,14 @@ int main(int argc, char** argv)
             traj_line.header.stamp = ros::Time::now();
             traj_line.points.push_back(p);
             marker_pub.publish(traj_line);
-        
+
             // Gripper control:
             // take last 5 predicted labels and check if muscle was activated
             if (last_label == 7 && predicted_label.data == 5) {
                 _activateGripper = true;
                 _activGripperMsg.data = 1;
                 std::cout << "Gripper activated"
-                        << "\n";
+                          << "\n";
             }
             else {
                 _activateGripper = false;
@@ -478,25 +472,25 @@ int main(int argc, char** argv)
                 _desGripperCommand.data = 1;
                 _pubGripperCommand.publish(_desGripperCommand);
                 std::cout << "Closing gripper"
-                        << "\n";
+                          << "\n";
             }
             if (_activateGripper && GripperState == 1) {
                 _desGripperCommand.data = 2;
                 _pubGripperCommand.publish(_desGripperCommand);
                 std::cout << "Opening gripper"
-                        << "\n";
+                          << "\n";
             }
 
             // saving all data in vector
-            data_vec[1] = _eePosition(0);     
-            data_vec[2] = _eePosition(1);      
-            data_vec[3] = _eePosition(2);      
-            data_vec[4] = _targetPosition(0);      
-            data_vec[5] = _targetPosition(1);     
-            data_vec[6] = _targetPosition(2);      
-            data_vec[7] = _vd.norm();                // end effector velocity (norm)
-            data_vec[8] = predicted_label.data;      // final emg label
-            data_vec[9] = _startRobotMotion;         // if received command to start motion
+            data_vec[1] = _eePosition(0);
+            data_vec[2] = _eePosition(1);
+            data_vec[3] = _eePosition(2);
+            data_vec[4] = _targetPosition(0);
+            data_vec[5] = _targetPosition(1);
+            data_vec[6] = _targetPosition(2);
+            data_vec[7] = _vd.norm(); // end effector velocity (norm)
+            data_vec[8] = predicted_label.data; // final emg label
+            data_vec[9] = _startRobotMotion; // if received command to start motion
             data_vec[10] = _pauseRobotMotion;
             data_vec[11] = gripper_position.data;
             data_vec[12] = gripper_status.data;
@@ -515,7 +509,6 @@ int main(int argc, char** argv)
         loop_rate.sleep();
         ++count;
     }
-
 
     return 0;
 }
