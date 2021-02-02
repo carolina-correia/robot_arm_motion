@@ -2,8 +2,9 @@
 
     <!-- <arg name="OBJECT" default="sphere"/> -->
     <arg name="GAZE" default="false"/>
-    <arg name="GRIPPER" default="false"/>
-    <arg name="GRIPPER_REAL" default="false"/>
+    <arg name="GRIPPER" default="true"/>
+    <arg name="GRIPPER_REAL" default="true"/>
+    <arg name="TARGET_SIM" default="false"/>
     
     <!-- <node name="set_initial_pose" pkg="motion_example" type="moveToDesiredJoints" output="screen" args="30 40 0 -70 0 70 30"/> -->
 

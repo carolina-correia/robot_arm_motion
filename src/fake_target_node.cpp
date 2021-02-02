@@ -23,9 +23,8 @@
 #include "visualization_msgs/Marker.h"
 #include <geometry_msgs/PoseStamped.h>
 
-#include <robot_arm_motion/obstacle_msg.h>
 #include "Utils.h"
-
+#include <robot_arm_motion/obstacle_msg.h>
 
 bool _firstRealPoseReceived = false;
 
@@ -282,7 +281,6 @@ void robotListener(const geometry_msgs::Pose::ConstPtr& msg)
         _firstRealPoseReceived = true;
     }
 }
-
 
 int main(int argc, char** argv)
 {
