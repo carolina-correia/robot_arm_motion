@@ -312,7 +312,7 @@ int main(int argc, char** argv)
     int last_label = 7;
 
     // name of file to save
-    std::string filename = "trial_w_audio3";
+    std::string filename = "trialsitting_11_02_21";
     _outputFile.open(ros::package::getPath(std::string("robot_arm_motion")) + "/data/" + filename + ".txt");
 
     double t_start = ros::Time::now().toSec();
